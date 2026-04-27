@@ -1,0 +1,14 @@
+{
+  "name": "news-notifier",
+  "version": "1.0.0",
+  "description": "Daily news notifier using GAS, Claude API, and Slack Webhook",
+  "scripts": {
+    "login": "clasp login",
+    "create": "clasp create --type standalone --rootDir src",
+    "push": "clasp push"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2",
+    "@types/google-apps-script": "^1.0.83"
+  }
+}
