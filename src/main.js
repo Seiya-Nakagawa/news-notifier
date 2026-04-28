@@ -3,11 +3,12 @@
  */
 function notifyMorningNews() {
   const props = PropertiesService.getScriptProperties();
-  const claudeApiKey = props.getProperty(CONFIG.PROPS.CLAUDE_API_KEY);
+  const geminiApiKey = props.getProperty(CONFIG.PROPS.GEMINI_API_KEY);
+  const geminiModelName = props.getProperty(CONFIG.PROPS.GEMINI_MODEL_NAME);
   const slackWebhookUrl = props.getProperty(CONFIG.PROPS.SLACK_WEBHOOK_URL);
 
-  if (!claudeApiKey || !slackWebhookUrl) {
-    console.error('Claude API Key or Slack Webhook URL is not set in Script Properties.');
+  if (!geminiApiKey || !geminiModelName || !slackWebhookUrl) {
+    console.error('Required Script Properties (GEMINI_API_KEY, GEMINI_MODEL_NAME, or SLACK_WEBHOOK_URL) are not set.');
     return;
   }
 
@@ -19,8 +20,8 @@ function notifyMorningNews() {
       return;
     }
 
-    // 2. Claudeで要約
-    const summary = summarizeNews(newsList, claudeApiKey);
+    // 2. Geminiで要約
+    const summary = summarizeNews(newsList, geminiApiKey, geminiModelName);
 
     // 3. Slackに通知
     postToSlack(summary, slackWebhookUrl);
@@ -44,56 +45,79 @@ function fetchNews() {
   const items = channel.getChildren('item');
   
   const newsList = [];
-  const limit = Math.min(items.length, CONFIG.NEWS_FETCH_COUNT);
+  const limit = Math.min(items.length, 10);
   for (let i = 0; i < limit; i++) {
     const item = items[i];
     const title = item.getChild('title').getText();
     const link = item.getChild('link').getText();
-    newsList.push(`- [${title}](${link})`);
+    const pubDate = item.getChild('pubDate') ? item.getChild('pubDate').getText() : '';
+    newsList.push(`タイトル: ${title}\nリンク: ${link}\n公開日時: ${pubDate}`);
   }
   return newsList;
 }
 
 /**
- * Claude APIを呼び出してニュースを要約する
+ * Gemini APIを呼び出してニュースを要約する
  * @param {Array<string>} newsList ニュース情報のリスト
- * @param {string} apiKey Claude APIキー
+ * @param {string} apiKey Gemini APIキー
+ * @param {string} modelName Gemini モデル名
  * @returns {string} 要約結果テキスト
  */
-function summarizeNews(newsList, apiKey) {
-  const prompt = `以下の最新ニュースのリストを読み、今日の主要なトピックとして簡潔に要約してください。
-ビジネスパーソン向けに、分かりやすくポジティブなトーンでまとめてください。
+function summarizeNews(newsList, apiKey, modelName) {
+  const prompt = `あなたは優秀なニュースキュレーターです。提供されたニュースリストを読み、以下の指示に従って「今日の重要ニュース」を作成してください。
 
-【ニュース一覧】
-${newsList.join('\n')}
+【重要：禁止事項】
+- 参考リンクやURLの出力は一切不要です。
+- リスト形式の羅列ではなく、背景や影響を読み解いた文章を作成してください。
 
-出力形式:
-* 冒頭の挨拶 (例: おはようございます！本日の主要ニュースです。)
-* トピックの要約 (箇条書きで分かりやすく)
-* 各ニュースのタイトルとリンク (参考情報として末尾に付与)
+【指示】
+1. 以下の4つのカテゴリについて、関連するトピックを抽出して深く要約してください。
+   - 政治
+   - 経済
+   - IT・AI
+   - その他重要トピック
+2. ビジネスパーソンが知っておくべき「なぜこれが重要か」という視点を必ず含めてください。
+3. トーンは「前向きで知的」なものにしてください。
+
+【ニュースリスト】
+${newsList.join('\n---\n')}
+
+【出力フォーマット】
+おはようございます！本日の主要ニュースをお届けします。
+
+(ここに導入文：世界情勢や国内の概況を1-2文で記載)
+
+■ 今日の要約
+(ここにカテゴリごとの要約を記載。各カテゴリ名は太字にし、箇条書きで分かりやすく説明してください)
 `;
 
   const payload = {
-    model: CONFIG.CLAUDE_MODEL,
-    max_tokens: 1024,
-    messages: [
-      { role: 'user', content: prompt }
-    ]
+    contents: [{
+      parts: [{
+        text: prompt
+      }]
+    }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 2048
+    }
   };
 
   const options = {
     method: 'post',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json'
-    },
+    contentType: 'application/json',
     payload: JSON.stringify(payload)
   };
 
-  const response = UrlFetchApp.fetch(CONFIG.CLAUDE_API_URL, options);
+  const url = `${CONFIG.GEMINI_BASE_URL}${modelName}:generateContent?key=${apiKey}`;
+  const response = UrlFetchApp.fetch(url, options);
   const json = JSON.parse(response.getContentText());
-  return json.content[0].text;
+  
+  if (json.candidates && json.candidates[0] && json.candidates[0].content) {
+    return json.candidates[0].content.parts[0].text;
+  } else {
+    throw new Error('Unexpected response from Gemini API: ' + response.getContentText());
+  }
 }
 
 /**

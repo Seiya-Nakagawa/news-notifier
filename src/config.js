@@ -1,14 +1,14 @@
 const CONFIG = {
   // スクリプトプロパティから取得するキー名
   PROPS: {
-    CLAUDE_API_KEY: 'CLAUDE_API_KEY',
+    GEMINI_API_KEY: 'GEMINI_API_KEY',
+    GEMINI_MODEL_NAME: 'GEMINI_MODEL_NAME', // モデル名（例: gemini-3.1-flash-lite-preview）
     SLACK_WEBHOOK_URL: 'SLACK_WEBHOOK_URL'
   },
   // ニュースRSSのURL (Google News 日本語版 トップニュース)
   NEWS_RSS_URL: 'https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja',
   // 取得するニュースの件数
-  NEWS_FETCH_COUNT: 5,
-  // Claude API設定
-  CLAUDE_API_URL: 'https://api.anthropic.com/v1/messages',
-  CLAUDE_MODEL: 'claude-3-5-sonnet-20241022'
+  NEWS_FETCH_COUNT: 10,
+  // Gemini API 基本設定 (プレビューモデルを使用するため v1beta を指定)
+  GEMINI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta/models/'
 };
