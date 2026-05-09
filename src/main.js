@@ -6,6 +6,7 @@ function notifyMorningNews() {
   const geminiApiKey = props.getProperty(CONFIG.PROPS.GEMINI_API_KEY);
   const geminiModelName = props.getProperty(CONFIG.PROPS.GEMINI_MODEL_NAME);
   const slackWebhookUrl = props.getProperty(CONFIG.PROPS.SLACK_WEBHOOK_URL);
+  const slackChannel = props.getProperty(CONFIG.PROPS.SLACK_CHANNEL);
 
   if (!geminiApiKey || !geminiModelName || !slackWebhookUrl) {
     console.error('Required Script Properties (GEMINI_API_KEY, GEMINI_MODEL_NAME, or SLACK_WEBHOOK_URL) are not set.');
@@ -24,7 +25,7 @@ function notifyMorningNews() {
     const summary = summarizeNews(newsList, geminiApiKey, geminiModelName);
 
     // 3. Slackに通知
-    postToSlack(summary, slackWebhookUrl);
+    postToSlack(summary, slackWebhookUrl, slackChannel);
 
     console.log('Successfully notified news to Slack.');
   } catch (error) {
@@ -133,11 +134,16 @@ ${newsList.join('\n---\n')}
  * SlackのWebhookにテキストを投稿する
  * @param {string} text 投稿するテキスト
  * @param {string} webhookUrl Slack Incoming Webhook URL
+ * @param {string} channel 投稿先のチャンネル名（任意）
  */
-function postToSlack(text, webhookUrl) {
+function postToSlack(text, webhookUrl, channel) {
   const payload = {
     text: text
   };
+
+  if (channel) {
+    payload.channel = channel;
+  }
 
   const options = {
     method: 'post',
