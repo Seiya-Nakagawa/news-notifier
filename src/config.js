@@ -9,7 +9,9 @@ const CONFIG = {
   // ニュースRSSのURL
   NEWS_RSS_URLS: {
     TOP: 'https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja',
-    TECHNOLOGY: 'https://news.google.com/news/rss/headlines/section/topic/TECHNOLOGY?hl=ja&gl=JP&ceid=JP:ja'
+    TECHNOLOGY: 'https://news.google.com/news/rss/headlines/section/topic/TECHNOLOGY?hl=ja&gl=JP&ceid=JP:ja',
+    JPCERT_CC: 'https://www.jpcert.or.jp/rss/jpcert.rdf',
+    ALAS: 'https://alas.aws.amazon.com/alas.rss'
   },
   // 取得するニュースの件数
   NEWS_FETCH_COUNT: 10,

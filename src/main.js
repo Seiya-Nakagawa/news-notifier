@@ -49,18 +49,40 @@ function fetchNews() {
       const document = XmlService.parse(xml);
       const root = document.getRootElement();
       const channel = root.getChild('channel');
-      const items = channel.getChildren('item');
+      
+      let items = [];
+      let isRdf = false;
+      let defaultNs = null;
+
+      // 通常のRSS(2.0)の場合は channel の下に item がある
+      if (channel && channel.getChildren('item').length > 0) {
+        items = channel.getChildren('item');
+      } else {
+        // RSS 1.0 (RDF) の場合は root の直下に item がある
+        defaultNs = root.getNamespace();
+        items = root.getChildren('item', defaultNs);
+        isRdf = true;
+      }
 
       const limit = Math.min(items.length, CONFIG.NEWS_FETCH_COUNT);
       for (let i = 0; i < limit; i++) {
         const item = items[i];
-        const title = item.getChild('title').getText();
-        const link = item.getChild('link').getText();
+        let title, link, pubDate;
+
+        if (!isRdf) {
+          title = item.getChild('title') ? item.getChild('title').getText() : '';
+          link = item.getChild('link') ? item.getChild('link').getText() : '';
+          pubDate = item.getChild('pubDate') ? item.getChild('pubDate').getText() : '';
+        } else {
+          title = item.getChild('title', defaultNs) ? item.getChild('title', defaultNs).getText() : '';
+          link = item.getChild('link', defaultNs) ? item.getChild('link', defaultNs).getText() : '';
+          const dcNs = XmlService.getNamespace('dc', 'http://purl.org/dc/elements/1.1/');
+          pubDate = item.getChild('date', dcNs) ? item.getChild('date', dcNs).getText() : '';
+        }
         
         if (seenLinks.has(link)) continue;
         seenLinks.add(link);
 
-        const pubDate = item.getChild('pubDate') ? item.getChild('pubDate').getText() : '';
         newsList.push(`タイトル: ${title}\nリンク: ${link}\n公開日時: ${pubDate}`);
       }
     } catch (e) {
@@ -86,10 +108,11 @@ function summarizeNews(newsList, apiKey, modelName) {
 - 箇条書きで簡潔に書いてほしい。
 
 【指示】
-1. 以下の4つのカテゴリについて、関連するトピックを抽出して深く要約してください。
+1. 以下の5つのカテゴリについて、関連するトピックを抽出して深く要約してください。
    - 政治
    - 経済
    - IT・AI
+   - セキュリティ (AWS、Linux、EC-CUBE等、システム開発・運用に関連する脆弱性情報を優先し、CVE番号がある場合は併記すること)
    - その他重要トピック
 
 【ニュースリスト】
