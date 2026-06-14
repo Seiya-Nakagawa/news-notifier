@@ -5,12 +5,16 @@ function notifyMorningNews() {
   const props = PropertiesService.getScriptProperties();
   const geminiApiKey = props.getProperty(CONFIG.PROPS.GEMINI_API_KEY);
   const geminiModelName = props.getProperty(CONFIG.PROPS.GEMINI_MODEL_NAME);
-  const slackWebhookUrl = props.getProperty(CONFIG.PROPS.SLACK_WEBHOOK_URL);
-  const slackChannel = props.getProperty(CONFIG.PROPS.SLACK_CHANNEL);
+  let emailAddress = props.getProperty(CONFIG.PROPS.NOTIFICATION_EMAIL);
 
-  if (!geminiApiKey || !geminiModelName || !slackWebhookUrl) {
-    console.error('Required Script Properties (GEMINI_API_KEY, GEMINI_MODEL_NAME, or SLACK_WEBHOOK_URL) are not set.');
+  if (!geminiApiKey || !geminiModelName) {
+    console.error('Required Script Properties (GEMINI_API_KEY or GEMINI_MODEL_NAME) are not set.');
     return;
+  }
+
+  if (!emailAddress) {
+    emailAddress = Session.getActiveUser().getEmail();
+    console.log(`NOTIFICATION_EMAIL property is not set. Defaulting to active user: ${emailAddress}`);
   }
 
   try {
@@ -24,10 +28,10 @@ function notifyMorningNews() {
     // 2. Geminiで要約
     const summary = summarizeNews(newsList, geminiApiKey, geminiModelName);
 
-    // 3. Slackに通知
-    postToSlack(summary, slackWebhookUrl, slackChannel);
+    // 3. メールに通知
+    sendEmailNotification(summary, emailAddress);
 
-    console.log('Successfully notified news to Slack.');
+    console.log(`Successfully notified news to email: ${emailAddress}`);
   } catch (error) {
     console.error('Error occurred:', error.toString());
   }
@@ -59,7 +63,10 @@ function fetchNews() {
         items = channel.getChildren('item');
       } else {
         // RSS 1.0 (RDF) の場合は root の直下に item がある
-        defaultNs = root.getNamespace();
+        defaultNs = root.getNamespace('');
+        if (!defaultNs || defaultNs.getURI() === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#') {
+          defaultNs = XmlService.getNamespace('http://purl.org/rss/1.0/');
+        }
         items = root.getChildren('item', defaultNs);
         isRdf = true;
       }
@@ -103,25 +110,36 @@ function fetchNews() {
 function summarizeNews(newsList, apiKey, modelName) {
   const prompt = `あなたは優秀なニュースキュレーターです。提供されたニュースリストを読み、以下の指示に従って「今日の重要ニュース」を作成してください。
 
-【重要：禁止事項】
-- 参考リンクやURLの出力は一切不要です。
-- 箇条書きで簡潔に書いてほしい。
-
 【指示】
-1. 以下の5つのカテゴリについて、関連するトピックを抽出して深く要約してください。
+1. 提供されたニュースリストから情報を抽出し、以下の5つのカテゴリに分類・要約してください：
    - 政治
    - 経済
    - IT・AI
    - セキュリティ (AWS、Linux、EC-CUBE等、システム開発・運用に関連する脆弱性情報を優先し、CVE番号がある場合は併記すること)
    - その他重要トピック
+2. 各カテゴリの要約は、重要なトピックを箇条書きで簡潔に（1トピックあたり1〜2行程度で）記述してください。
+3. 参考リンクやURLは出力しないでください。
+
+【出力フォーマット】
+■ 今日の要約
+
+**政治**
+* (トピックの要約)
+
+**経済**
+* (トピックの要約)
+
+**IT・AI**
+* (トピックの要約)
+
+**セキュリティ**
+* (トピックの要約)
+
+**その他重要トピック**
+* (トピックの要約)
 
 【ニュースリスト】
 ${newsList.join('\n---\n')}
-
-【出力フォーマット】
-
-■ 今日の要約
-(ここにカテゴリごとの要約を記載。各カテゴリ名は太字にし、箇条書きで簡潔に書いてください)
 `;
 
   const payload = {
@@ -132,7 +150,7 @@ ${newsList.join('\n---\n')}
     }],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 2048
+      maxOutputTokens: 8192
     }
   };
 
@@ -146,33 +164,36 @@ ${newsList.join('\n---\n')}
   const response = UrlFetchApp.fetch(url, options);
   const json = JSON.parse(response.getContentText());
 
-  if (json.candidates && json.candidates[0] && json.candidates[0].content) {
-    return json.candidates[0].content.parts[0].text;
-  } else {
-    throw new Error('Unexpected response from Gemini API: ' + response.getContentText());
+  if (json.candidates && json.candidates[0]) {
+    const candidate = json.candidates[0];
+    console.log('Gemini finishReason:', candidate.finishReason);
+    if (candidate.content && candidate.content.parts && candidate.content.parts[0]) {
+      return candidate.content.parts[0].text;
+    }
   }
+  throw new Error('Unexpected response from Gemini API: ' + response.getContentText());
 }
 
 /**
- * SlackのWebhookにテキストを投稿する
- * @param {string} text 投稿するテキスト
- * @param {string} webhookUrl Slack Incoming Webhook URL
- * @param {string} channel 投稿先のチャンネル名（任意）
+ * 指定したメールアドレスにニュースの要約を送信する
+ * @param {string} text 送信するテキスト（要約）
+ * @param {string} emailAddress 送信先メールアドレス
  */
-function postToSlack(text, webhookUrl, channel) {
-  const payload = {
-    text: text
-  };
+function sendEmailNotification(text, emailAddress) {
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy/MM/dd');
+  const subject = `【重要】今日のニュース要約 (${today})`;
 
-  if (channel) {
-    payload.channel = channel;
+  GmailApp.sendEmail(emailAddress, subject, text);
+}
+
+/**
+ * デバッグ用: スクリプトプロパティの設定状態を確認する
+ */
+function testProperties() {
+  const props = PropertiesService.getScriptProperties().getProperties();
+  console.log("設定されているプロパティ一覧:");
+  for (const key in props) {
+    // セキュリティのため、値そのものではなくキー名と文字数を出力
+    console.log("- " + key + ": " + (props[key] ? "設定あり (文字数: " + props[key].length + ")" : "空"));
   }
-
-  const options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload)
-  };
-
-  UrlFetchApp.fetch(webhookUrl, options);
 }
