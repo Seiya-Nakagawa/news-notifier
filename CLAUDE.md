@@ -1,6 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、本リポジトリ固有の事情を記録したものです。
+
+基本方針・機密情報の取り扱い・Git 運用・コーディング規約・Markdown 記法などの共通規約は
+グローバル規約（`~/.claude/CLAUDE.md`、`~/.gemini/GEMINI.md`、`~/.claude/rules/`）に従います。
+**本ファイルに共通規約を重複定義しないこと。**
 
 ## Overview
 
@@ -38,9 +42,9 @@ Secrets and per-environment config live in the GAS project's Script Properties (
 
 ## Deploy / verify flow
 
-Follow the global GAS deploy rule (`.claude/rules/gas-deploy-flow.md` in the user's home config): push with `clasp push`, then run `notifyMorningNews` (or `testProperties`) from the Apps Script editor to verify, check the trigger under the clock icon, and only push to git / open a PR after the user confirms it works — never push to git before that confirmation.
+Follow the global GAS deploy rule (`~/.claude/rules/gas-deploy-flow.md`): push with `clasp push`, then run `notifyMorningNews` (or `testProperties`) from the Apps Script editor to verify, check the trigger under the clock icon, and only push to git / open a PR after the user confirms it works — never push to git before that confirmation.
 
-Per `GEMINI.md`, all work commits directly to `main` (no feature branches), and commit messages follow Conventional Commits with Japanese descriptions (e.g. `feat: ...`, `fix: ...`).
+This is a standalone, time-driven-trigger script rather than a web app, so the `clasp deploy -i` step in that rule does not apply here — `clasp push` alone makes the new code live for the trigger.
 
 ## Notes on doc drift
 
